@@ -5,7 +5,7 @@ from bot.core.settings import settings
 
 
 class Base(DeclarativeBase):
-    pass
+    """Base class for all database models."""
 
 
 engine = create_async_engine(

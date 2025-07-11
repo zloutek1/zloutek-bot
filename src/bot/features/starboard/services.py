@@ -1,62 +1,63 @@
 import logging
 from datetime import UTC, datetime
 
-from bot.features.starboard.models import MessageData, MessageReference, ReactionData, StarboardMessage
+from bot.features.starboard.models import MessageData, ReactionData, StarboardEntry
 
 from .repositories import StarboardRepository
 
 log = logging.getLogger(__name__)
 
 
+STARBOARD_CHANNEL_ID = 123456789012345678  # Example Starboard Channel ID
+STARBOARD_THRESHOLD = 1  # Example: 3 stars needed
+
+
 class StarboardService:
     def __init__(self, repository: StarboardRepository):
         self._repository = repository
 
-    async def process_reaction_add(self, message: MessageData, reaction: ReactionData) -> StarboardMessage | None:
-        log.info(f"Processing reaction add for message {message.id} with reaction {reaction.emoji}")
+    async def process_reaction_add(self, message: MessageData, reaction: ReactionData) -> StarboardEntry | None:
+        """Send a message to a starboard channel if the reaction meets criteria."""
 
-        if not self._should_create_starboard_entry(message, reaction):
-            log.debug("Reaction does not meet criteria for starboard entry")
+        if not self._meets_starboard_criteria(message, reaction):
+            log.debug(f"Reaction {reaction.emoji} does not meet criteria.")
             return None
 
-        existing = await self._repository.get_starboard_message(message.id)
-        if existing:
-            log.debug(f"Updating existing starboard entry for message {message.id}")
+        entry = await self._repository.find(message.id)
+        if entry:
             await self._repository.update_reaction_count(message.id, reaction.count)
-            return existing
+            return entry
 
-        log.debug(f"Creating new starboard entry for message {message.id}")
+        log.info(f"Creating new starboard entry for message {message.id}")
         entry = self._create_starboard_entry(message, reaction)
-        await self._repository.save_starboard_message(entry)
+        await self._repository.create(entry)
         return entry
 
-    def _should_create_starboard_entry(self, message_data: MessageData, reaction_data: ReactionData) -> bool:
+    def _meets_starboard_criteria(self, message_data: MessageData, reaction_data: ReactionData) -> bool:
         """Check if a reaction meets the criteria for starboard inclusion."""
 
         return (
             reaction_data.emoji == "⭐"  # Only star reactions
-            and reaction_data.count >= 1
+            and reaction_data.count >= STARBOARD_THRESHOLD
         )
 
-    def _create_starboard_entry(self, message_data: MessageData, reaction_data: ReactionData) -> StarboardMessage:
-        """Create a new starboard entry from message and reaction data."""
+    def _create_starboard_entry(self, message_data: MessageData, reaction_data: ReactionData) -> StarboardEntry:
+        """Creates a new StarboardEntry domain model."""
         now = datetime.now(UTC)
-
-        return StarboardMessage(
-            original=MessageReference(
-                guild_id=message_data.guild_id,
-                channel_id=message_data.channel_id,
-                message_id=message_data.id,
-            ),
-            starboard=MessageReference(
-                guild_id=message_data.guild_id,
-                channel_id=message_data.channel_id,
-                message_id=None,  # will be filled later
-            ),
+        return StarboardEntry(
+            original_message_id=message_data.id,
+            original_channel_id=message_data.channel_id,
+            original_guild_id=message_data.guild_id,
+            original_author_id=message_data.author_id,
+            original_jump_url=message_data.jump_url,
+            starboard_channel_id=STARBOARD_CHANNEL_ID,  # From config
+            content=message_data.content,
+            attachment_urls=message_data.attachment_urls,
             reaction_count=reaction_data.count,
-            last_updated=now,
+            created_at=now,
+            updated_at=now,
         )
 
-    async def save_starred_message(self, original_message_id: int, starboard_message_id: int) -> None:
+    async def set_starboard_message_id(self, original_message_id: int, starboard_message_id: int) -> None:
         """Mark a message as starred in the database."""
-        await self._repository.set_starboard_message(original_message_id, starboard_message_id)
+        await self._repository.set_starboard_message_id(original_message_id, starboard_message_id)
