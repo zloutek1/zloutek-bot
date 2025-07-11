@@ -1,21 +1,20 @@
 import asyncio
 
 import discord
-from discord.ext import commands
 
-from bot.adapters.discord.cogs.welcome import WelcomeCog
-from bot.core.config import settings
-from bot.features.welcome.services import WelcomeService
+from bot.adapters.database.database import create_tables
+from bot.core.bot import ZloutekBot
+from bot.core.settings import settings
 
 
 async def main() -> None:
+    await create_tables()
+
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True
 
-    bot = commands.Bot(command_prefix="!", intents=intents)
-
-    await bot.add_cog(WelcomeCog(bot=bot, welcome_service=WelcomeService()))
+    bot = ZloutekBot(command_prefix="!", intents=intents)
 
     await bot.start(settings.bot_token)
 

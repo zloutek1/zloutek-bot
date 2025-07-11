@@ -1,6 +1,5 @@
-from discord.ext import commands
-
 from bot.features.welcome.services import WelcomeService
+from discord.ext import commands
 
 
 class WelcomeCog(commands.Cog):
@@ -15,7 +14,5 @@ class WelcomeCog(commands.Cog):
             await ctx.send("This command only works in a server.")
             return
 
-        greeting = self._service.generate_welcome_text(
-            guild_id=ctx.guild.id, user_name=ctx.author.display_name
-        )
+        greeting = self._service.generate_welcome_text(guild_id=ctx.guild.id, user_name=ctx.author.display_name)
         await ctx.send(greeting)
