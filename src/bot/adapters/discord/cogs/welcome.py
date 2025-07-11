@@ -16,3 +16,9 @@ class WelcomeCog(commands.Cog):
 
         greeting = self._service.generate_welcome_text(guild_id=ctx.guild.id, user_name=ctx.author.display_name)
         await ctx.send(greeting)
+
+
+async def setup(bot: commands.Bot) -> None:
+    welcome_service = WelcomeService()
+    cog = WelcomeCog(bot, welcome_service)
+    await bot.add_cog(cog)

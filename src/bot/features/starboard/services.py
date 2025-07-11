@@ -1,8 +1,11 @@
+import logging
 from datetime import UTC, datetime
 
-from bot.features.starboard.models import MessageData, ReactionData, StarboardMessage
+from bot.features.starboard.models import MessageData, MessageReference, ReactionData, StarboardMessage
 
 from .repositories import StarboardRepository
+
+log = logging.getLogger(__name__)
 
 
 class StarboardService:
@@ -10,14 +13,19 @@ class StarboardService:
         self._repository = repository
 
     async def process_reaction_add(self, message: MessageData, reaction: ReactionData) -> StarboardMessage | None:
+        log.info(f"Processing reaction add for message {message.id} with reaction {reaction.emoji}")
+
         if not self._should_create_starboard_entry(message, reaction):
+            log.debug("Reaction does not meet criteria for starboard entry")
             return None
 
         existing = await self._repository.get_starboard_message(message.id)
         if existing:
+            log.debug(f"Updating existing starboard entry for message {message.id}")
             await self._repository.update_reaction_count(message.id, reaction.count)
             return existing
 
+        log.debug(f"Creating new starboard entry for message {message.id}")
         entry = self._create_starboard_entry(message, reaction)
         await self._repository.save_starboard_message(entry)
         return entry
@@ -35,15 +43,20 @@ class StarboardService:
         now = datetime.now(UTC)
 
         return StarboardMessage(
-            original_message_id=message_data.id,
-            original_channel_id=message_data.channel_id,
-            starboard_message_id=None,  # Will be set when actually posted to starboard
-            starboard_channel_id=0,  # Configure this based on your guild settings
-            author_id=message_data.author_id,
-            content=message_data.content,
-            attachment_urls=message_data.attachment_urls,
+            original=MessageReference(
+                guild_id=message_data.guild_id,
+                channel_id=message_data.channel_id,
+                message_id=message_data.id,
+            ),
+            starboard=MessageReference(
+                guild_id=message_data.guild_id,
+                channel_id=message_data.channel_id,
+                message_id=None,  # will be filled later
+            ),
             reaction_count=reaction_data.count,
-            emoji_used=reaction_data.emoji,
-            created_at=now,
             last_updated=now,
         )
+
+    async def save_starred_message(self, original_message_id: int, starboard_message_id: int) -> None:
+        """Mark a message as starred in the database."""
+        await self._repository.set_starboard_message(original_message_id, starboard_message_id)

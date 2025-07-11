@@ -1,12 +1,15 @@
+import logging
 from typing import NamedTuple
 
 import discord
 from bot.adapters.database.database import async_session_factory as session_factory
-from bot.adapters.database.starboard import StarboardRepository
+from bot.adapters.database.starboard import OrmStarboardRepository
 from bot.adapters.discord.utils import DiscordEntityFetcher
 from bot.features.starboard.models import MessageData, ReactionData
 from bot.features.starboard.services import StarboardService
 from discord.ext import commands
+
+log = logging.getLogger(__name__)
 
 
 class FetchedEntities(NamedTuple):
@@ -26,17 +29,31 @@ class StarboardCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+        log.info(f"Received reaction add event: {payload}")
         if not self._is_valid_reaction_event(payload):
+            log.debug("Ignoring invalid reaction add event")
             return
 
-        entities = await self._fetch_discord_entities(payload)
+        fetcher = DiscordEntityFetcher(self.bot)
+        entities = await self._fetch_discord_entities(fetcher, payload)
         if not entities:
+            log.debug("Failed to fetch required entities")
             return
 
         message_data = self._convert_to_message_data(entities.message)
         reaction_data = self._convert_to_reaction_data(entities.reaction, entities.message.id)
 
-        await self.service.process_reaction_add(message_data, reaction_data)
+        starboard_message_data = await self.service.process_reaction_add(message_data, reaction_data)
+        if not starboard_message_data:
+            log.debug("No starboard entry created")
+            return
+
+        print("starred message data", starboard_message_data)
+        channel = await fetcher.fetch_messageable_channel(payload.channel_id)
+        if channel:
+            starboard_message = await channel.send("[STARRED]" + starboard_message_data.model_dump_json())
+
+        self.service.save_starred_message(entities.message.id, starboard_message.id)
 
     def _is_valid_reaction_event(self, payload: discord.RawReactionActionEvent) -> bool:
         # Ignore DMs
@@ -49,9 +66,9 @@ class StarboardCog(commands.Cog):
 
         return True
 
-    async def _fetch_discord_entities(self, payload: discord.RawReactionActionEvent) -> FetchedEntities | None:
-        fetcher = DiscordEntityFetcher(self.bot)
-
+    async def _fetch_discord_entities(
+        self, fetcher: DiscordEntityFetcher, payload: discord.RawReactionActionEvent
+    ) -> FetchedEntities | None:
         if not (guild := await fetcher.fetch_guild(payload.guild_id)):
             return None
 
@@ -90,7 +107,7 @@ class StarboardCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot) -> None:
-    repository = StarboardRepository(session_factory)
+    repository = OrmStarboardRepository(session_factory)
     service = StarboardService(repository)
     cog = StarboardCog(bot=bot, service=service)
     await bot.add_cog(cog)

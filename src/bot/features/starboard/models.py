@@ -19,9 +19,15 @@ class ReactionData(BaseModel):
     message_id: int
 
 
-class StarboardMessage(BaseModel):
-    original_message_id: int
-    starboard_message_id: int | None
+class MessageReference(BaseModel):
     guild_id: int
+    channel_id: int
+    message_id: int | None
+
+
+class StarboardMessage(BaseModel):
+    original: MessageReference
+    starboard: MessageReference | None
+
     reaction_count: int
     last_updated: datetime
