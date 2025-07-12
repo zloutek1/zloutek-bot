@@ -24,13 +24,9 @@ class StarboardEmbed(discord.Embed):
         super().__init__(color=discord.Color.gold(), timestamp=entry.created_at)
 
         self.set_author(name=author.display_name, icon_url=author.display_avatar.url)
-
         self.description = entry.content
-
         self.add_field(name="Original Message", value=f"[Jump to Message]({entry.original_jump_url})", inline=False)
-
         self.add_field(name="Stars", value=f"⭐ {entry.reaction_count}", inline=True)
-
         if entry.attachment_urls:
             self.set_image(url=entry.attachment_urls[0])
 

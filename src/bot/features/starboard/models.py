@@ -60,3 +60,37 @@ class StarboardEntry(BaseModel):
     # --- Timestamps ---
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def to_create(cls, message: MessageData, reaction: ReactionData, starboard_channel_id: int) -> "StarboardEntry":
+        now = datetime.now()
+        return cls(
+            original_message_id=message.id,
+            original_channel_id=message.channel_id,
+            original_guild_id=message.guild_id,
+            original_author_id=message.author_id,
+            original_jump_url=message.jump_url,
+            starboard_channel_id=starboard_channel_id,
+            content=message.content,
+            attachment_urls=message.attachment_urls,
+            reaction_count=reaction.count,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def to_update(self, message: MessageData, reaction: ReactionData) -> "StarboardEntry":
+        return self.model_copy(
+            update={
+                "content": message.content,
+                "attachment_urls": message.attachment_urls,
+                "reaction_count": reaction.count,
+                "updated_at": datetime.now(),
+            }
+        )
+
+    def with_starboard_message_id(self, starboard_message_id: int) -> "StarboardEntry":
+        return self.model_copy(
+            update={
+                "starboard_message_id": starboard_message_id,
+            }
+        )
