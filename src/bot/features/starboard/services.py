@@ -8,7 +8,7 @@ from .repositories import StarboardRepository
 log = logging.getLogger(__name__)
 
 
-STARBOARD_CHANNEL_ID = 123456789012345678  # Example Starboard Channel ID
+STARBOARD_CHANNEL_ID = 1393196186164264980  # Example Starboard Channel ID
 STARBOARD_THRESHOLD = 1  # Example: 3 stars needed
 
 
@@ -25,7 +25,12 @@ class StarboardService:
 
         entry = await self._repository.find(message.id)
         if entry:
-            await self._repository.update_reaction_count(message.id, reaction.count)
+            entry.reaction_count = reaction.count
+            entry.updated_at = datetime.now(UTC)
+            entry.content = message.content
+            entry.attachment_urls = message.attachment_urls
+
+            await self._repository.update(entry)
             return entry
 
         log.info(f"Creating new starboard entry for message {message.id}")
@@ -60,4 +65,9 @@ class StarboardService:
 
     async def set_starboard_message_id(self, original_message_id: int, starboard_message_id: int) -> None:
         """Mark a message as starred in the database."""
-        await self._repository.set_starboard_message_id(original_message_id, starboard_message_id)
+        entry = await self._repository.find(original_message_id)
+        if not entry:
+            return
+
+        entry.starboard_message_id = starboard_message_id
+        await self._repository.update(entry)

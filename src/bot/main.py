@@ -2,8 +2,8 @@ import asyncio
 
 import discord
 
-from bot.adapters.database.database import create_tables
 from bot.core.bot import ZloutekBot
+from bot.core.database import create_tables
 from bot.core.logging import setup_logging
 from bot.core.settings import settings
 
@@ -18,6 +18,7 @@ async def main() -> None:
     bot = ZloutekBot(command_prefix="!", intents=intents)
     await bot.load_extension("bot.adapters.discord.cogs.welcome")
     await bot.load_extension("bot.adapters.discord.cogs.starboard")
+    await bot.load_extension("bot.adapters.discord.cogs.admin")
 
     await create_tables()
 

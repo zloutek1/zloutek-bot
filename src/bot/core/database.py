@@ -10,7 +10,7 @@ class Base(DeclarativeBase):
 
 engine = create_async_engine(
     settings.database_url,
-    echo=True,
+    echo=False,
 )
 
 async_session_factory = async_sessionmaker(

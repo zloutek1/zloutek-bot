@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 from bot.core.typing import Id, Url
 
-
 # ==========================================
 # --- Input DTOs (Data Transfer Objects) ---
 # ==========================================

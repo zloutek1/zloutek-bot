@@ -4,7 +4,7 @@ from sqlalchemy import BigInteger, DateTime, String, Text, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
-from bot.adapters.database.database import Base
+from bot.core.database import Base
 from bot.core.typing import Mapper
 from bot.features.starboard.models import StarboardEntry
 
@@ -27,7 +27,7 @@ class StarboardMessageTable(Base):
 
     # Content and state
     content: Mapped[str] = mapped_column(Text, nullable=True)
-    attachment_urls: Mapped[list[str]] = mapped_column(Text, nullable=False, default=[])
+    attachment_urls: Mapped[str] = mapped_column(Text, nullable=False, default="")
     reaction_count: Mapped[int] = mapped_column(nullable=False, default=0)
 
     # Timestamps
@@ -46,7 +46,7 @@ class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
             starboard_message_id=model.starboard_message_id,
             starboard_channel_id=model.starboard_channel_id,
             content=model.content,
-            attachment_urls=model.attachment_urls,
+            attachment_urls=",".join(model.attachment_urls),
             reaction_count=model.reaction_count,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -62,7 +62,7 @@ class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
             starboard_message_id=entity.starboard_message_id,
             starboard_channel_id=entity.starboard_channel_id,
             content=entity.content,
-            attachment_urls=entity.attachment_urls,
+            attachment_urls=entity.attachment_urls.split(","),
             reaction_count=entity.reaction_count,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
@@ -89,12 +89,20 @@ class OrmStarboardRepository:
 
             return self.mapper.to_model(entity) if entity else None
 
-    async def update_reaction_count(self, original_message_id: int, reaction_count: int) -> None:
+    async def update(self, message: StarboardEntry) -> None:
         async with self.session_factory() as session:
             stmt = (
                 update(StarboardMessageTable)
-                .where(StarboardMessageTable.original_message_id == original_message_id)
-                .values(reaction_count=reaction_count, last_updated=datetime.now(UTC))
+                .values(
+                    starboard_message_id=message.starboard_message_id,
+                    starboard_channel_id=message.starboard_channel_id,
+                    content=message.content,
+                    attachment_urls=",".join(message.attachment_urls),
+                    reaction_count=message.reaction_count,
+                    created_at=message.created_at,
+                    updated_at=message.updated_at,
+                )
+                .where(StarboardMessageTable.original_message_id == message.original_message_id)
             )
             await session.execute(stmt)
             await session.commit()
@@ -106,13 +114,3 @@ class OrmStarboardRepository:
             entities = list(result.scalars().all())
 
             return [self.mapper.to_model(entity) for entity in entities]
-
-    async def set_starboard_message_id(self, original_message_id: int, starboard_message_id: int) -> None:
-        async with self.session_factory() as session:
-            stmt = (
-                update(StarboardMessageTable)
-                .where(StarboardMessageTable.original_message_id == original_message_id)
-                .values(starboard_message_id=starboard_message_id, last_updated=datetime.now(UTC))
-            )
-            await session.execute(stmt)
-            await session.commit()

@@ -2,7 +2,7 @@ import logging
 from typing import NamedTuple
 
 import discord
-from bot.adapters.database.database import async_session_factory as session_factory
+from bot.core.database import async_session_factory as session_factory
 from bot.adapters.database.starboard import OrmStarboardRepository, StarboardMapper
 from bot.adapters.discord.utils import DiscordEntityFetcher
 from bot.features.starboard.models import MessageData, ReactionData, StarboardEntry
@@ -71,21 +71,22 @@ class StarboardCog(commands.Cog):
 
         embed = StarboardEmbed(entry, author=entities.author)
         if entry.starboard_message_id:
-            # The entry was updated, so we edit the existing starboard message
             try:
                 starboard_message = await starboard_channel.fetch_message(entry.starboard_message_id)
                 await starboard_message.edit(embed=embed)
                 log.info(f"Updated starboard message {starboard_message.id}")
+                return
             except discord.NotFound:
-                log.error(f"Could not find starboard message {entry.starboard_message_id} to edit.")
-        else:
-            # This is a new entry, so we send a new message
-            starboard_message = await starboard_channel.send(embed=embed)
-            log.info(f"Created new starboard message {starboard_message.id}")
-            # Now, we tell the service the ID of the message we just created
-            await self.service.set_starboard_message_id(
-                original_message_id=entry.original_message_id, starboard_message_id=starboard_message.id
-            )
+                pass
+
+        # This is a new entry, so we send a new message
+        starboard_message = await starboard_channel.send(embed=embed)
+        log.info(f"Created new starboard message {starboard_message.id}")
+        # Now, we tell the service the ID of the message we just created
+
+        await self.service.set_starboard_message_id(
+            original_message_id=entry.original_message_id, starboard_message_id=starboard_message.id
+        )
 
     def _is_valid_reaction_event(self, payload: discord.RawReactionActionEvent) -> bool:
         # Ignore DMs
@@ -97,8 +98,8 @@ class StarboardCog(commands.Cog):
             return False
 
         # Prevent starring a message in the starboard channel itself
-        if payload.channel_id == STARBOARD_CHANNEL_ID:
-            return False
+        # if payload.channel_id == STARBOARD_CHANNEL_ID:
+        #    return False
 
         return True
 
