@@ -13,13 +13,7 @@ log = logging.getLogger(__name__)
 
 
 class FetchedEntities(NamedTuple):
-    """A data class to hold the fetched entities for type-safe access."""
-
-    guild: discord.Guild
-    author: discord.Member | discord.User  # The author of the original message
-    reacter: discord.Member | discord.User  # The user who added the reaction
-    channel: discord.abc.Messageable
-    message: discord.Message
+    reacter: discord.Member | discord.User
     reaction: discord.Reaction
 
 
@@ -52,34 +46,54 @@ class StarboardCog(commands.Cog):
         if not self._is_valid_reaction_event(payload):
             return
 
-        entities = await self._fetch_discord_entities(payload)
+        entities = await self.fetcher.fetch_reaction_action_event(payload)
         if not entities:
-            log.warning(f"Failed to fetch all required entities for payload: {payload}")
+            log.error(f"Failed to fetch all required entities for payload: {payload}")
             return
 
-        starboard_channel = await self.fetcher.fetch_messageable_channel(STARBOARD_CHANNEL_ID)
-        if not isinstance(starboard_channel, discord.TextChannel):
-            log.error(f"Could not find starboard channel with ID {STARBOARD_CHANNEL_ID}")
-            return
+        await self.on_reaction_add(entities.reaction, entities.user)
 
-        message_data = self._convert_to_message_data(entities.message)
-        reaction_data = self._convert_to_reaction_data(entities.reaction, entities.message.id)
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User | discord.Member) -> None:
+        log.debug(f"Processing reaction add for message {reaction.message.id} by user {user.id}")
+
+        message_data = self._convert_to_message_data(reaction.message)
+        reaction_data = self._convert_to_reaction_data(reaction, reaction.message.id)
 
         entry = await self.service.process_reaction_add(message_data, reaction_data)
         if not entry:
             return
 
-        embed = StarboardEmbed(entry, author=entities.author)
-        if entry.starboard_message_id:
-            try:
-                starboard_message = await starboard_channel.fetch_message(entry.starboard_message_id)
-                await starboard_message.edit(embed=embed)
-                log.info(f"Updated starboard message {starboard_message.id}")
-                return
-            except discord.NotFound:
-                pass
+        await self._update_or_create_starboard_message(entry, reaction.message.author)
 
-        # This is a new entry, so we send a new message
+    async def _update_or_create_starboard_message(
+        self, entry: StarboardEntry, author: discord.Member | discord.User
+    ) -> None:
+        """Updates an existing starboard message or creates a new one."""
+
+        starboard_channel = await self._get_starboard_channel()
+        if not isinstance(starboard_channel, discord.TextChannel):
+            log.critical(f"Starboard channel with ID {STARBOARD_CHANNEL_ID} is not a text channel.")
+            return
+
+        embed = StarboardEmbed(entry, author=author)
+
+        if entry.starboard_message_id:
+            await self._update_starboard_message(starboard_channel, entry, embed)
+            return
+
+        await self._create_starboard_message(starboard_channel, entry, embed)
+
+    async def _get_starboard_channel(self) -> discord.abc.Messageable | None:
+        """Fetches the starboard channel."""
+        channel = await self.fetcher.fetch_messageable_channel(STARBOARD_CHANNEL_ID)
+        if not channel:
+            log.error(f"Could not find starboard channel with ID {STARBOARD_CHANNEL_ID}")
+        return channel
+
+    async def _create_starboard_message(
+        self, starboard_channel: discord.TextChannel, entry: StarboardEntry, embed: discord.Embed
+    ) -> None:
+        """Creates a new message in the starboard channel."""
         starboard_message = await starboard_channel.send(embed=embed)
         log.info(f"Created new starboard message {starboard_message.id}")
         # Now, we tell the service the ID of the message we just created
@@ -87,6 +101,26 @@ class StarboardCog(commands.Cog):
         await self.service.set_starboard_message_id(
             original_message_id=entry.original_message_id, starboard_message_id=starboard_message.id
         )
+
+    async def _update_starboard_message(
+        self, starboard_channel: discord.TextChannel, entry: StarboardEntry, embed: discord.Embed
+    ) -> None:
+        """Updates an existing message in the starboard channel."""
+
+        assert entry.starboard_message_id is not None
+
+        try:
+            starboard_message = await starboard_channel.fetch_message(entry.starboard_message_id)
+            await starboard_message.edit(embed=embed)
+            log.info(
+                f"Updated starboard message {starboard_message.id} for original message {entry.original_message_id}"
+            )
+        except discord.NotFound:
+            # If the starboard message was deleted, we should potentially clean up the entry
+            log.warning(
+                f"Starboard message {entry.starboard_message_id} not found. Original message: {entry.original_message_id}. Skipping update."
+            )
+            await self._create_starboard_message(starboard_channel, entry, embed)
 
     def _is_valid_reaction_event(self, payload: discord.RawReactionActionEvent) -> bool:
         # Ignore DMs
@@ -102,24 +136,6 @@ class StarboardCog(commands.Cog):
         #    return False
 
         return True
-
-    async def _fetch_discord_entities(self, payload: discord.RawReactionActionEvent) -> FetchedEntities | None:
-        if not (guild := await self.fetcher.fetch_guild(payload.guild_id)):
-            return None
-
-        if not (member := await self.fetcher.fetch_member(guild, payload.user_id)):
-            return None
-
-        if not (channel := await self.fetcher.fetch_messageable_channel(payload.channel_id)):
-            return None
-
-        if not (message := await self.fetcher.fetch_message(channel, payload.message_id)):
-            return None
-
-        if not (reaction := await self.fetcher.fetch_reaction(message, payload.emoji)):
-            return None
-
-        return FetchedEntities(guild, message.author, member, channel, message, reaction)
 
     def _convert_to_message_data(self, message: discord.Message) -> MessageData:
         """Convert a Discord message to the MessageData DTO."""

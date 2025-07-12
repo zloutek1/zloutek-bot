@@ -1,8 +1,13 @@
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import discord
 from discord.ext import commands
+
+
+class ReactionActionEvent(NamedTuple):
+    reaction: discord.Reaction
+    user: discord.User | discord.Member
 
 
 class DiscordEntityFetcher:
@@ -31,6 +36,27 @@ class DiscordEntityFetcher:
             return await fetch_callable(*args, **kwargs)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             return None
+
+    async def fetch_reaction_action_event(
+        self,
+        payload: discord.RawReactionActionEvent,
+    ) -> ReactionActionEvent | None:
+        if not (guild := await self.fetch_guild(payload.guild_id)):
+            return None
+
+        if not (member := await self.fetch_member(guild, payload.user_id)):
+            return None
+
+        if not (channel := await self.fetch_messageable_channel(payload.channel_id)):
+            return None
+
+        if not (message := await self.fetch_message(channel, payload.message_id)):
+            return None
+
+        if not (reaction := await self.fetch_reaction(message, payload.emoji)):
+            return None
+
+        return ReactionActionEvent(reaction, member)
 
     async def fetch_guild(self, guild_id: int | None) -> discord.Guild | None:
         """
