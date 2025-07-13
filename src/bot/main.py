@@ -16,9 +16,7 @@ async def main() -> None:
     intents.message_content = True
 
     bot = ZloutekBot(command_prefix="!", intents=intents)
-    await bot.load_extension("bot.adapters.discord.cogs.welcome")
-    await bot.load_extension("bot.adapters.discord.cogs.starboard")
-    await bot.load_extension("bot.adapters.discord.cogs.admin")
+    await bot.load_extension("bot.starboard")
 
     await create_tables()
 

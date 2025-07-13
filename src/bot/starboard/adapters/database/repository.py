@@ -6,20 +6,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.core.database import Base
 from bot.core.typing import Mapper
-from bot.features.starboard.models import StarboardEntry
+from bot.starboard.domain.models import StarboardEntry
 
 
 class StarboardMessageTable(Base):
     __tablename__ = "starboard_messages"
 
-    # Use the original message ID as the primary key as it's unique
     original_message_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-
-    # Original message details
-    original_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_jump_url: Mapped[str] = mapped_column(String, nullable=False)
 
     # Starboard message details
     starboard_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
@@ -30,14 +23,10 @@ class StarboardMessageTable(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
+class OrmStarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
     def from_model(self, model: StarboardEntry) -> StarboardMessageTable:
         return StarboardMessageTable(
             original_message_id=model.original_message_id,
-            original_channel_id=model.original_channel_id,
-            original_guild_id=model.original_guild_id,
-            original_author_id=model.original_author_id,
-            original_jump_url=model.original_jump_url,
             starboard_message_id=model.starboard_message_id,
             starboard_channel_id=model.starboard_channel_id,
             created_at=model.created_at,
@@ -47,10 +36,6 @@ class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
     def to_model(self, entity: StarboardMessageTable) -> StarboardEntry:
         return StarboardEntry(
             original_message_id=entity.original_message_id,
-            original_channel_id=entity.original_channel_id,
-            original_guild_id=entity.original_guild_id,
-            original_author_id=entity.original_author_id,
-            original_jump_url=entity.original_jump_url,
             starboard_message_id=entity.starboard_message_id,
             starboard_channel_id=entity.starboard_channel_id,
             created_at=entity.created_at,
@@ -65,12 +50,7 @@ class OrmStarboardRepository:
         self.session_factory = session_factory
         self.mapper = mapper
 
-    async def create(self, message: StarboardEntry) -> None:
-        async with self.session_factory() as session:
-            session.add(self.mapper.from_model(message))
-            await session.commit()
-
-    async def find(self, original_message_id: int) -> StarboardEntry | None:
+    async def find_by_message_id(self, original_message_id: int) -> StarboardEntry | None:
         async with self.session_factory() as session:
             stmt = select(StarboardMessageTable).where(StarboardMessageTable.original_message_id == original_message_id)
             result = await session.execute(stmt)
@@ -78,7 +58,18 @@ class OrmStarboardRepository:
 
             return self.mapper.to_model(entity) if entity else None
 
-    async def update(self, message: StarboardEntry) -> None:
+    async def save(self, entry: StarboardEntry) -> None:
+        if await self.find_by_message_id(entry.original_message_id):
+            await self._update(entry)
+        else:
+            await self._create(entry)
+
+    async def _create(self, message: StarboardEntry) -> None:
+        async with self.session_factory() as session:
+            session.add(self.mapper.from_model(message))
+            await session.commit()
+
+    async def _update(self, message: StarboardEntry) -> None:
         async with self.session_factory() as session:
             stmt = (
                 update(StarboardMessageTable)
@@ -92,11 +83,3 @@ class OrmStarboardRepository:
             )
             await session.execute(stmt)
             await session.commit()
-
-    async def get_pending_updates(self, cutoff_time: datetime) -> list[StarboardEntry]:
-        async with self.session_factory() as session:
-            stmt = select(StarboardMessageTable).where(StarboardMessageTable.updated_at < cutoff_time)
-            result = await session.execute(stmt)
-            entities = list(result.scalars().all())
-
-            return [self.mapper.to_model(entity) for entity in entities]
