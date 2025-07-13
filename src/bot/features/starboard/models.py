@@ -52,11 +52,6 @@ class StarboardEntry(BaseModel):
     starboard_message_id: Id | None = None  # Populated after the starboard message is sent
     starboard_channel_id: Id  # The ID of the channel where star messages go
 
-    # --- Content and State ---
-    content: str
-    attachment_urls: list[Url] = Field(default_factory=list)
-    reaction_count: int
-
     # --- Timestamps ---
     created_at: datetime
     updated_at: datetime
@@ -71,26 +66,12 @@ class StarboardEntry(BaseModel):
             original_author_id=message.author_id,
             original_jump_url=message.jump_url,
             starboard_channel_id=starboard_channel_id,
-            content=message.content,
-            attachment_urls=message.attachment_urls,
-            reaction_count=reaction.count,
             created_at=now,
             updated_at=now,
         )
 
     def to_update(self, message: MessageData, reaction: ReactionData) -> "StarboardEntry":
-        return self.model_copy(
-            update={
-                "content": message.content,
-                "attachment_urls": message.attachment_urls,
-                "reaction_count": reaction.count,
-                "updated_at": datetime.now(),
-            }
-        )
+        return self.model_copy(update={"updated_at": datetime.now()})
 
     def with_starboard_message_id(self, starboard_message_id: int) -> "StarboardEntry":
-        return self.model_copy(
-            update={
-                "starboard_message_id": starboard_message_id,
-            }
-        )
+        return self.model_copy(update={"starboard_message_id": starboard_message_id, "updated_at": datetime.now()})

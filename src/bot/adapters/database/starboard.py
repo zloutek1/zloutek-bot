@@ -25,11 +25,6 @@ class StarboardMessageTable(Base):
     starboard_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
     starboard_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    # Content and state
-    content: Mapped[str] = mapped_column(Text, nullable=True)
-    attachment_urls: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    reaction_count: Mapped[int] = mapped_column(nullable=False, default=0)
-
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -45,9 +40,6 @@ class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
             original_jump_url=model.original_jump_url,
             starboard_message_id=model.starboard_message_id,
             starboard_channel_id=model.starboard_channel_id,
-            content=model.content,
-            attachment_urls=",".join(model.attachment_urls),
-            reaction_count=model.reaction_count,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -61,9 +53,6 @@ class StarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
             original_jump_url=entity.original_jump_url,
             starboard_message_id=entity.starboard_message_id,
             starboard_channel_id=entity.starboard_channel_id,
-            content=entity.content,
-            attachment_urls=entity.attachment_urls.split(","),
-            reaction_count=entity.reaction_count,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
         )
@@ -96,9 +85,6 @@ class OrmStarboardRepository:
                 .values(
                     starboard_message_id=message.starboard_message_id,
                     starboard_channel_id=message.starboard_channel_id,
-                    content=message.content,
-                    attachment_urls=",".join(message.attachment_urls),
-                    reaction_count=message.reaction_count,
                     created_at=message.created_at,
                     updated_at=message.updated_at,
                 )

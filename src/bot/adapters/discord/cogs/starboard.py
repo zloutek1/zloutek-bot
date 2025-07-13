@@ -2,9 +2,9 @@ import logging
 from typing import NamedTuple
 
 import discord
-from bot.core.database import async_session_factory as session_factory
 from bot.adapters.database.starboard import OrmStarboardRepository, StarboardMapper
 from bot.adapters.discord.utils import DiscordEntityFetcher
+from bot.core.database import async_session_factory as session_factory
 from bot.features.starboard.models import MessageData, ReactionData, StarboardEntry
 from bot.features.starboard.services import STARBOARD_CHANNEL_ID, StarboardService
 from discord.ext import commands
@@ -20,15 +20,24 @@ class FetchedEntities(NamedTuple):
 class StarboardEmbed(discord.Embed):
     """A custom embed class for starboard messages."""
 
-    def __init__(self, entry: StarboardEntry, author: discord.Member | discord.User):
-        super().__init__(color=discord.Color.gold(), timestamp=entry.created_at)
+    def __init__(self, message: discord.Message):
+        super().__init__(color=discord.Color.gold(), timestamp=message.created_at)
 
+        author = message.author
         self.set_author(name=author.display_name, icon_url=author.display_avatar.url)
-        self.description = entry.content
-        self.add_field(name="Original Message", value=f"[Jump to Message]({entry.original_jump_url})", inline=False)
-        self.add_field(name="Stars", value=f"⭐ {entry.reaction_count}", inline=True)
-        if entry.attachment_urls:
-            self.set_image(url=entry.attachment_urls[0])
+
+        assert isinstance(message.channel, discord.TextChannel | discord.Thread | discord.channel.VocalGuildChannel)
+        reactions = " ".join(f"{reaction.emoji} {reaction.count}" for reaction in message.reactions)
+
+        self.description = f"""
+        {message.content}
+
+        {reactions}
+        [Jump to message]({message.jump_url}) in {message.channel.mention}
+        """
+
+        if message.attachments:
+            self.set_image(url=message.attachments[0])
 
 
 class StarboardCog(commands.Cog):
@@ -59,11 +68,9 @@ class StarboardCog(commands.Cog):
         if not entry:
             return
 
-        await self._update_or_create_starboard_message(entry, reaction.message.author)
+        await self._update_or_create_starboard_message(entry, reaction.message)
 
-    async def _update_or_create_starboard_message(
-        self, entry: StarboardEntry, author: discord.Member | discord.User
-    ) -> None:
+    async def _update_or_create_starboard_message(self, entry: StarboardEntry, message: discord.Message) -> None:
         """Updates an existing starboard message or creates a new one."""
 
         starboard_channel = await self._get_starboard_channel()
@@ -71,13 +78,12 @@ class StarboardCog(commands.Cog):
             log.critical(f"Starboard channel with ID {STARBOARD_CHANNEL_ID} is not a text channel.")
             return
 
-        embed = StarboardEmbed(entry, author=author)
+        embed = StarboardEmbed(message)
 
         if entry.starboard_message_id:
             await self._update_starboard_message(starboard_channel, entry, embed)
-            return
-
-        await self._create_starboard_message(starboard_channel, entry, embed)
+        else:
+            await self._create_starboard_message(starboard_channel, entry, embed)
 
     async def _get_starboard_channel(self) -> discord.abc.Messageable | None:
         """Fetches the starboard channel."""
