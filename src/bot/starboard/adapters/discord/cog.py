@@ -16,7 +16,9 @@ class MessageMapper(Mapper[StarboardMessage, discord.Message]):
         raise NotImplementedError()
 
     def to_model(self, entity: discord.Message) -> StarboardMessage:
-        assert entity.guild is not None
+        if not entity.guild:
+            raise ValueError("Message must be in a guild")
+
         return StarboardMessage(
             id=entity.id,
             channel_id=entity.channel.id,

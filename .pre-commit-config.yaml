@@ -6,20 +6,20 @@ repos:
     - id: end-of-file-fixer
     - id: trailing-whitespace
 
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.12.3
+    hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix]
+    - id: ruff-format
+
   - repo: https://github.com/psf/black
-    rev: 24.4.2
+    rev: 25.1.0
     hooks:
     - id: black
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.4.4
-    hooks:
-    - id: ruff
-      args: [--fix, --exit-non-zero-on-fix] # Auto-fix what it can
-    - id: ruff-format # Use ruff's formatter if you prefer it over black
-
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+    rev: v1.16.1
     hooks:
     - id: mypy
       # This ensures mypy can find your project's dependencies
@@ -31,7 +31,7 @@ repos:
         - "asyncpg"
 
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.8
+    rev: 1.8.6
     hooks:
     - id: bandit
       args: ["-c", "pyproject.toml"]

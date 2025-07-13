@@ -3,7 +3,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from bot.core.typing import Id, Url
+from bot.core.typing import Id
 
 
 class StarboardStatus(Enum):
