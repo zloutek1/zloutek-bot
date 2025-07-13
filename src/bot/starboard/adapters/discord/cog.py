@@ -4,10 +4,39 @@ import discord
 from discord.ext import commands
 
 from bot.core.adapters.discord.utils import ReactionEventHydrator
+from bot.core.typing import Mapper
 from bot.starboard.application.ports import StarboardMessage, StarboardReaction
 from bot.starboard.application.services import StarboardService
 
 log = logging.getLogger(__name__)
+
+
+class MessageMapper(Mapper[StarboardMessage, discord.Message]):
+    def from_model(self, model: StarboardMessage) -> discord.Message:
+        raise NotImplementedError()
+
+    def to_model(self, entity: discord.Message) -> StarboardMessage:
+        assert entity.guild is not None
+        return StarboardMessage(
+            id=entity.id,
+            channel_id=entity.channel.id,
+            guild_id=entity.guild.id,
+            author_id=entity.author.id,
+            author_display_name=entity.author.display_name,
+            author_avatar_url=entity.author.avatar.url if entity.author.avatar else None,
+            content=entity.content,
+            attachment_urls=[att.url for att in entity.attachments],
+            jump_url=entity.jump_url,
+            created_at=entity.created_at,
+        )
+
+
+class ReactionMapper(Mapper[StarboardReaction, discord.Reaction]):
+    def from_model(self, model: StarboardReaction) -> discord.Reaction:
+        raise NotImplementedError()
+
+    def to_model(self, entity: discord.Reaction) -> StarboardReaction:
+        return StarboardReaction(emoji=str(entity.emoji), count=entity.count, message_id=entity.message.id)
 
 
 class StarboardCog(commands.Cog):
@@ -15,21 +44,21 @@ class StarboardCog(commands.Cog):
         self.bot = bot
         self.service = service
         self.hydrator = ReactionEventHydrator(bot)
+        self.message_mapper = MessageMapper()
+        self.reaction_mapper = ReactionMapper()
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         if not self._is_relevant_reaction_event(payload):
             return
 
-        # Fetch Discord entities
         entities = await self.hydrator.hydrate(payload)
         if not entities:
             log.error(f"Failed to fetch entities for reaction event: {payload}")
             return
 
-        # Convert Discord objects to domain models
-        message = self._convert_to_domain_message(entities.reaction.message)
-        reaction = self._convert_to_domain_reaction(entities.reaction)
+        message = self.message_mapper.to_model(entities.reaction.message)
+        reaction = self.reaction_mapper.to_model(entities.reaction)
 
         await self.service.handle_reaction_added(message, reaction)
 
@@ -43,31 +72,3 @@ class StarboardCog(commands.Cog):
             return False
 
         return True
-
-    def _convert_to_domain_message(self, discord_message: discord.Message) -> StarboardMessage:
-        """
-        Convert Discord message to domain model.
-        This is the translation layer between Discord and domain.
-        """
-        assert discord_message.guild is not None
-        return StarboardMessage(
-            id=discord_message.id,
-            channel_id=discord_message.channel.id,
-            guild_id=discord_message.guild.id,
-            author_id=discord_message.author.id,
-            author_display_name=discord_message.author.display_name,
-            author_avatar_url=discord_message.author.avatar.url,
-            content=discord_message.content,
-            attachment_urls=[att.url for att in discord_message.attachments],
-            jump_url=discord_message.jump_url,
-            created_at=discord_message.created_at,
-        )
-
-    def _convert_to_domain_reaction(self, discord_reaction: discord.Reaction) -> StarboardReaction:
-        """
-        Convert Discord reaction to domain model.
-        This is the translation layer between Discord and domain.
-        """
-        return StarboardReaction(
-            emoji=str(discord_reaction.emoji), count=discord_reaction.count, message_id=discord_reaction.message.id
-        )

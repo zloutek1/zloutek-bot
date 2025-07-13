@@ -18,7 +18,7 @@ class StarboardMessage(BaseModel):
     guild_id: Id
     author_id: Id
     author_display_name: str
-    author_avatar_url: Url
+    author_avatar_url: Url | None
     content: str
     attachment_urls: list[Url]
     jump_url: Url
@@ -44,7 +44,7 @@ class StarboardRepository(Protocol):
 
 class StarboardPresentation(BaseModel):
     author_display_name: str
-    author_avatar_url: Url
+    author_avatar_url: Url | None
     message_content: str
     reactions_display: str
     jump_url: Url
