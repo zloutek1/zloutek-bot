@@ -4,41 +4,10 @@ import discord
 from discord.ext import commands
 
 from bot.core.adapters.discord.utils import ReactionEventHydrator
-from bot.core.typing import Mapper
-from bot.starboard.application.ports import StarboardMessage, StarboardReaction
+from bot.starboard.adapters.discord.mappers import MessageMapper, ReactionMapper
 from bot.starboard.application.services import StarboardService
 
 log = logging.getLogger(__name__)
-
-
-class MessageMapper(Mapper[StarboardMessage, discord.Message]):
-    def from_model(self, model: StarboardMessage) -> discord.Message:
-        raise NotImplementedError()
-
-    def to_model(self, entity: discord.Message) -> StarboardMessage:
-        if not entity.guild:
-            raise ValueError("Message must be in a guild")
-
-        return StarboardMessage(
-            id=entity.id,
-            channel_id=entity.channel.id,
-            guild_id=entity.guild.id,
-            author_id=entity.author.id,
-            author_display_name=entity.author.display_name,
-            author_avatar_url=entity.author.avatar.url if entity.author.avatar else None,
-            content=entity.content,
-            attachment_urls=[att.url for att in entity.attachments],
-            jump_url=entity.jump_url,
-            created_at=entity.created_at,
-        )
-
-
-class ReactionMapper(Mapper[StarboardReaction, discord.Reaction]):
-    def from_model(self, model: StarboardReaction) -> discord.Reaction:
-        raise NotImplementedError()
-
-    def to_model(self, entity: discord.Reaction) -> StarboardReaction:
-        return StarboardReaction(emoji=str(entity.emoji), count=entity.count, message_id=entity.message.id)
 
 
 class StarboardCog(commands.Cog):

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.core.database import Base
-from bot.core.typing import Mapper
+from bot.core.typing import ModelMapper
 from bot.starboard.domain.models import StarboardEntry
 
 
@@ -23,7 +23,7 @@ class StarboardMessageTable(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class OrmStarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
+class OrmStarboardMapper(ModelMapper[StarboardEntry, StarboardMessageTable]):
     def from_model(self, model: StarboardEntry) -> StarboardMessageTable:
         return StarboardMessageTable(
             original_message_id=model.original_message_id,
@@ -45,7 +45,9 @@ class OrmStarboardMapper(Mapper[StarboardEntry, StarboardMessageTable]):
 
 class OrmStarboardRepository:
     def __init__(
-        self, session_factory: async_sessionmaker[AsyncSession], mapper: Mapper[StarboardEntry, StarboardMessageTable]
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        mapper: ModelMapper[StarboardEntry, StarboardMessageTable],
     ):
         self.session_factory = session_factory
         self.mapper = mapper
